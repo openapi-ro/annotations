@@ -25,11 +25,27 @@ defmodule Annotations.Annotation do
       %__MODULE__{ann| from: Enum.max([ann.from-new_start, 0]), to: Enum.max([ann.to-new_start, 0]) }
     end
   end
+  def intersects?(%__MODULE__{}=first, %__MODULE__{from: from, to: to}=second) do
+    intersects? first, from,to
+  end
   def intersects?(%__MODULE__{from: from, to: to}, cmp_from, cmp_to) do
     cond do
-      cmp_to <= from -> false
-      cmp_from >= to -> false
+      cmp_to < from -> false
+      cmp_from > to -> false
       true-> true
+    end
+  end
+  def overlaps?(%__MODULE__{}=first, %__MODULE__{from: from, to: to}) do
+    overlaps? first, from, to
+  end
+  def overlaps?(%__MODULE__{from: from, to: to}, cmp_from, cmp_to) do
+    cond do
+      cmp_to <= from ->false
+      cmp_from >= to -> false
+      true->
+        #require IEx
+        #IEx.pry
+        true
     end
   end
   def crop_overlap(%__MODULE__{from: from, to: to}=ann, cmp_from, cmp_to) do
@@ -47,8 +63,6 @@ defmodule Annotations.Annotation do
     {_,chunk} = String.split_at(chunk,ann.from)
     chunk
   end
-
-
   def split_annotated_buffer(buffer, annotations, split_pos) when is_bitstring(buffer) and is_integer(split_pos) do
     buf_len=String.length(buffer)
     if split_pos==0 or split_pos>buf_len-1 do
@@ -74,5 +88,12 @@ defmodule Annotations.Annotation do
           end)
       [{first,first_ann}, {last, last_ann}]
     end
+  end
+  def has_tag?(%__MODULE__{tags: tags} , tag) do
+    tags
+    |> Enum.reduce_while(false, fn
+        tag_cmp , _ when tag==tag_cmp-> {:halt, true}
+        _,_-> {:cont, false}
+        end)
   end
 end

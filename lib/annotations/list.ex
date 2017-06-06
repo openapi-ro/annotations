@@ -73,4 +73,67 @@ defmodule Annotations.List do
     end
     |> Enum.map( fn {from,to}-> tag_creator.(from,to) end)
   end
+  def disjoint?(list) do
+    disjoint?(list , fn _-> true end,[])
+  end
+  def disjoint?(list, any) do
+    disjoint?(list , any ,[])
+  end
+  def disjoint?(list, tag,options) when is_atom(tag) do
+    disjoint?(list, fn ann -> Annotation.has_tag?(ann, tag) end)
+  end
+  def disjoint?(list, tags, options) when is_list(tags) do
+    disjoint? list, MapSet.new(tags), []
+  end
+  def disjoint?(list, %MapSet{}=tags, options)  do
+    disjoint?(list,  fn ann->
+      case  ann.tags do
+        []->false
+        [one]-> MapSet.member? tags, one
+        many-> MapSet.disjoint? tags, MapSet.new(many)
+      end
+     end)
+  end
+  @doc """
+    Returns true if no annotation from `list` overlaps with another one.
+    `consider_func` returns a truth value. Only annotations for which the result
+    of `consider_func(annotation)` is truthish is considered for disjoint testing
+
+    See `Annotation.disjoint?/2` for an explanation of testing whether two annotations
+    are disjoint
+  """
+  def disjoint?(list, consider_func, options) when is_function(consider_func) do
+    list=
+      if options[:sorted] do
+        list
+      else
+        list|> Enum.sort_by(&(&1.from))
+      end
+    ret=
+      list
+      |> Enum.reduce_while( nil, fn
+          ann, nil-> 
+            if consider_func.(ann) do
+              {:cont,ann}
+            else
+              {:cont,nil}
+            end
+          ann , last ->
+            if consider_func.(ann) do
+              if Annotation.overlaps?(ann, last) do
+                {:halt,false}
+              else
+                {:cont, ann}
+              end
+            else
+              {:cont, last}
+            end
+      end)
+    if ret do
+      true
+    else
+      false
+    end
+  end
+
 end

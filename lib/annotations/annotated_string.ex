@@ -119,48 +119,59 @@ defmodule Annotations.AnnotatedString do
     #:split_at: 2,
     #:to_existing_atom: 1,
   ]
+  def split(%__MODULE__{}=arg) do
+    split(arg," ")
+  end
   @doc """
     splits the Annotated string in two. Each String keeps the Annotations referring to itsaelf.
     Annotations spanning split boundaries are duplicated to each neighboring chunk
   """
-  def split(%__MODULE__{str: str, annotations: ann}, %Regex{}=re, orig_options \\[]) do
+  def split(%__MODULE__{str: str, annotations: ann}, splitter, orig_options \\[]) do
     options=
       orig_options
       |> Keyword.merge([include_captures: true])
-    with_captures=String.split(str, re, options)
+    with_captures=String.split(str, splitter, options)
     str_chunks =
       if orig_options[:include_captures] do
         with_captures
       else
-        String.split(orig_options)
+        String.split(str,splitter,orig_options)
       end
+    {_,ret,_}=
     str_chunks
-    |> Enum.reduce({with_captures,[], ann}, fn
-          str_chunk, {with_captures,result, ann} ->
-            Enum.reduce_while( with_captures, {str_chunk,result,ann},fn
-              [first|rest],{ str_chunk, result, annotations} when first == str_chunk->
-                str_chunk_len = String.length(str_chunk)
-                chunk_annotations=
-                  annotations
-                  |> Stream.map( &(Annotation.crop_overlap(&1, 0, str_chunk_len)))
-                  |> Enum.filter(&(&1))
-                annotations =
-                  annotations
-                  |> Stream.filter(&(&1.to < str_chunk_len)) # remove annotations only applying to previous chunks
-                  |> Stream.map(&(Annotations.offset(&1,str_chunk_len)))
-                  |> Enum.filter(&(&1)) #take out nils
-                new_ann= %__MODULE__{str: first, annotations: chunk_annotations }
-                {:halt,{rest,result, annotations}}
-              [first|rest],{ str_chunk, result, annotations}->
-                str_chunk_len = String.length(str_chunk)
-                annotations =
-                  annotations
-                  |> Stream.filter(&(&1.to < str_chunk_len)) # remove annotations only applying to previous chunks
-                  |> Stream.map(&(Annotations.offset(&1,str_chunk_len)))
-                  |> Enum.filter(&(&1)) #take out nils
-                {:cont ,{rest,result, annotations}}
-            end)
-    end)
+    |>Enum.reduce({with_captures,[], ann}, fn
+        str_chunk, {with_captures,result, ann} ->
+          {last_chunk, idx, result, annotations} =
+          with_captures
+          |>Stream.with_index()
+          |>Enum.reduce_while( {str_chunk,result,ann},fn
+            {first,idx},{ str_chunk, result, annotations} when first == str_chunk->
+              str_chunk_len = String.length(first)
+              chunk_annotations=
+                annotations
+                |> Stream.map( &(Annotation.crop_overlap(&1, 0, str_chunk_len)))
+                |> Enum.filter(&(&1))
+              prev_ann = annotations
+              annotations =
+                annotations
+                |> Stream.filter(&(&1.to > str_chunk_len)) # remove annotations only applying to previous chunks
+                |> Stream.map(&(Annotation.offset(&1,str_chunk_len)))
+                |> Enum.filter(&(&1)) #take out nils
+              new_ann= %__MODULE__{str: first, annotations: chunk_annotations }
+              {:halt,{str_chunk,idx+1,result++[new_ann], annotations}}
+            {first,idx},{ str_chunk, result, annotations}->
+              str_chunk_len = String.length(first)
+              annotations =
+                annotations
+                |> Stream.filter(&(&1.to > str_chunk_len)) # remove annotations only applying to previous chunks
+                |> Stream.map(&(Annotation.offset(&1,str_chunk_len)))
+                |> Enum.filter(&(&1)) #take out nils
+              {:cont ,{str_chunk,result, annotations}}
+          end)
+          {_,with_captures}=Enum.split(with_captures,idx)
+          {with_captures, result, annotations}
+      end)
+    ret
   end
   def split_at(%__MODULE__{str: str, annotations: anns}, where) when is_integer(where) do
     [first,last]= Annotation.split_annotated_buffer(str, anns, where)
@@ -200,5 +211,17 @@ defmodule Annotations.AnnotatedString do
   def extract_annotations(%__MODULE__{}=str,tag, options) do
     extract_annotations(str, MapSet.new([tag]), options)
   end
-  
+
+  @doc """
+    Tests whether the annotations in the `AnnotatedString` are disjoint.
+    `consider` can be any of the values allowed by `Annotations.List.disjoint?/2`
+
+  """
+  def disjoint?(%__MODULE__{annotations: anns}, consider\\nil) do
+    if consider do
+      Annotations.List.disjoint?(anns, consider)
+    else
+      Annotations.List.disjoint(anns)
+    end
+  end
 end
