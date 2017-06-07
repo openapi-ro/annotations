@@ -18,12 +18,9 @@ defmodule Annotations.Annotation do
   def length(%__MODULE__{}=ann) do
     ann.to-ann.from
   end
+  
   def offset(%__MODULE__{}=ann, new_start) when is_integer(new_start) and new_start>=0 do
-    if new_start >=ann.to do
-      nil
-    else
-      %__MODULE__{ann| from: Enum.max([ann.from-new_start, 0]), to: Enum.max([ann.to-new_start, 0]) }
-    end
+    %__MODULE__{ann| from: ann.from+new_start, to: ann.to+new_start }
   end
   def intersects?(%__MODULE__{}=first, %__MODULE__{from: from, to: to}=second) do
     intersects? first, from,to
@@ -46,6 +43,24 @@ defmodule Annotations.Annotation do
         #require IEx
         #IEx.pry
         true
+    end
+  end
+  def crop_start(%__MODULE__{}=ann, new_start) when is_integer(new_start) and new_start>=0 do
+    if new_start >=ann.to do
+      nil
+    else
+      %__MODULE__{ann| from: Enum.max([ann.from-new_start, 0]), to: Enum.max([ann.to-new_start, 0]) }
+    end
+  end
+  def crop_end(%__MODULE__{}=ann, new_end) when is_integer(new_end) and new_end>=0 do
+    if new_end <=ann.to do
+      nil
+    else
+      if new_end < ann.to do
+        %__MODULE__{ann| to: Enum.max([ann.to-new_end, 0]) }
+      else
+        ann
+      end
     end
   end
   def crop_overlap(%__MODULE__{from: from, to: to}=ann, cmp_from, cmp_to) do
@@ -77,12 +92,13 @@ defmodule Annotations.Annotation do
         [{first, 0, split_pos} ,{last,split_pos,buf_len}]
         |> Enum.map( fn {_str, f, t} -> 
             annotations
+            |> Stream.filter(&(&1))
             |> Stream.map( fn ann ->
               crop_overlap(ann, f,t)
             end)
             |> Stream.filter(&(&1))
-            |> Stream.map(fn ann -> 
-              offset(ann,f)
+            |> Stream.map(fn ann ->
+              crop_start(ann,f)
             end)
             |> Enum.to_list()
           end)

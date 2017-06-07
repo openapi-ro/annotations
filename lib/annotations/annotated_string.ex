@@ -38,6 +38,11 @@ defmodule Annotations.AnnotatedString do
     %__MODULE__{str: str, annotations: []}
   end
   def new(str, annotations) do
+    annotations =
+      case annotations do
+         %Annotation{}-> [annotations]
+         _ when is_list(annotations)-> annotations
+      end
     %__MODULE__{str: str, annotations: annotations}
   end
 
@@ -173,6 +178,65 @@ defmodule Annotations.AnnotatedString do
       end)
     ret
   end
+
+  def split_by_tags(%__MODULE__{}=str,tags) do
+    split_by_tags(str,tags,[])
+  end
+  @doc """
+    splits the string at the before or after annotations tagged with any tag in tags
+    options: split: (:before | :after)
+    For a general function for splitting based on Annotations look  at `split_by_annotation/3`
+  """
+  def split_by_tags(%__MODULE__{}=str,tags,options) do
+    tag_set=
+    case tags do
+      tag when is_atom(tag) ->MapSet.new [tag]
+      tags when is_list(tags)-> MapSet.new tags
+      %MapSet{}-> tags
+    end
+    options = Keyword.put(options, :split, Keyword.get(options,:split, :after))
+    match_result = options[:split]
+    split_by_annotation(str, fn str, ann -> 
+      included? =
+        case ann.tags do
+          []-> false
+          [tag]-> MapSet.member?(tag_set, tag)
+          other-> not MapSet.disjoint?(tag_set, MapSet.new(other))
+        end
+      if included? do
+        match_result
+      else
+        nil
+      end
+    end, options)
+  end
+  @doc """
+    Splits a AnnotatedString at any point within an annotation.
+    fun is a fn str, ann-> nil|:before|:after|integer, where integer is between ann.from and ann.to
+
+  """
+  def split_by_annotation(%__MODULE__{str: str, annotations: anns}=ann_str, fun, options\\[]) when is_function(fun) do
+
+      split_points=
+        Enum.reduce( anns, [] , fn %Annotation{from: from, to: to}=ann, acc->
+          case fun.(str,ann) do
+            :after -> [ann.to|acc]
+            :before -> [ann.from |acc]
+            idx when is_integer(idx) and idx <= from and idx >=to-> [idx|acc]
+            other when is_integer(other)-> raise "integer #{other} is not between from and to of annotation #{inspect ann}"
+            _-> acc
+          end
+         end)
+        |> Enum.sort_by(&(&1*-1))
+        |> Enum.uniq()
+      {chunks, first}=
+      split_points
+      |> Enum.reduce( {[],ann_str} , fn  point, {list, str} -> 
+        {left,right}= __MODULE__.split_at(str, point)
+        {[right|list], left}
+        end)
+      [first| chunks]
+  end
   def split_at(%__MODULE__{str: str, annotations: anns}, where) when is_integer(where) do
     [first,last]= Annotation.split_annotated_buffer(str, anns, where)
     { new(first), new(last)}
@@ -194,7 +258,7 @@ defmodule Annotations.AnnotatedString do
       |> Enum.filter( fn 
           %Annotation{ tags: [tag]} -> MapSet.member? tags,tag
           %Annotation{ tags: []} ->false
-          %Annotation{ tags: ann_tags} -> not MapSet.disjoint?(ann_tags, tags)
+          %Annotation{ tags: ann_tags} -> not MapSet.disjoint?(MapSet.new(ann_tags), tags)
         end)
       |> Enum.map( fn ann ->
           {_, last} = split_at(arg,ann.from)
@@ -224,4 +288,60 @@ defmodule Annotations.AnnotatedString do
       Annotations.List.disjoint(anns)
     end
   end
+  @doc """
+    Joins the given enumerable into a binary using joiner as a separator.
+
+    If joiner is not passed at all, it defaults  to %AnnotatedString(" ", Annotation.new(0, 1, :joiner)).
+
+    All items in the enumerable and the joiner must be `AnnotatedString`s or `Strings`, otherwise an error is raised.
+  """
+  def join(enum, joiner \\ __MODULE__.new(" ", Annotation.new(0, 1, :joiner)) ) do
+    joiner=
+    if is_bitstring(joiner) do
+      joiner = __MODULE__.new(joiner, Annotation.new(0, String.length(joiner), :joiner))
+    else
+      joiner
+    end
+    joiner_len= __MODULE__.length(joiner)
+    Enum.reduce(enum, __MODULE__.new(""), fn
+      add_str, %__MODULE__{str: str, annotations: anns} when is_bitstring(add_str)  ->
+          {joiner_str,joiner_len, joiner_anns} =
+            case str do
+              ""-> {"",0,[]}
+              other when joiner_len==0 -> {"",0,[]}
+              other -> {joiner.str, __MODULE__.length(joiner), Enum.map(joiner.annotations, &( Annotation.offset(&1,String.length(str))))}
+            end
+          new( str<> joiner_str <> add_str , anns ++ joiner_anns )
+      %__MODULE__{str: add_str , annotations: add_anns}, %__MODULE__{str: str, annotations: anns} when is_bitstring(str)  ->
+          cur_len=String.length(str)
+          {joiner_str,joiner_len, joiner_anns} =
+            case str do
+              ""-> {"",0,[]}
+              other when joiner_len ==0 -> {"",0,[]}
+              other -> {joiner.str, __MODULE__.length(joiner), Enum.map(joiner.annotations, &( Annotation.offset(&1,cur_len)))}
+            end
+          new( str<> joiner_str <> add_str ,
+              anns ++
+              joiner_anns++
+              Enum.map(add_anns, &( Annotation.offset(&1,cur_len+joiner_len)))
+              )
+    end)
+  end
+  def select_annotation_ranges(%__MODULE__{str: str, annotations: annotations}, fun \\nil) do
+    if is_nil(fun) do
+      Annotations.List.select_annotation_ranges(annotations)
+    else
+      Annotations.List.select_annotation_ranges(annotations, fn ann -> fun.(ann,str) end)
+    end
+  end
+  def add_annotations(%__MODULE__{}=str, %__MODULE__{annotations: anns}) do
+    add_annotations(str, anns)
+  end
+  def add_annotations(%__MODULE__{annotations: anns}=str, annotations) do
+    annotations=
+      (anns ++ annotations)
+      |> Enum.sort_by(&( &1.from))
+    %__MODULE__{str| annotations: annotations}
+  end
+
 end

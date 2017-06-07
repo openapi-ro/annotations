@@ -4,8 +4,8 @@ defmodule AnnotatedStringTest do
   alias Annotations.List
   use ExUnit.Case
   @sentence_string "first second third. fourth fifth sixth."
-  def test_sentence do
-    AnnotatedString.new(@sentence_string)
+  def test_sentence(str \\ @sentence_string) do
+    AnnotatedString.new(str)
       |>AnnotatedString.tag_all(~r/[.]/ , :punctuation)
       |>AnnotatedString.tag_all(~r/[^.[:space:]]+[^.]+/ , :sentence)
       |>AnnotatedString.tag_all(~r/[[:alnum:]]+[[:space:].]/ , :word)
@@ -33,4 +33,33 @@ defmodule AnnotatedStringTest do
     assert String.split(@sentence_string) == Enum.map(fragments , &AnnotatedString.to_string/1)
 
   end
+  test "join two AnnotatedString" do
+    str= test_sentence
+    addition= test_sentence "just added another sentence."
+    ret = AnnotatedString.join [str, addition]
+    x=AnnotatedString.to_string(ret)
+    assert Enum.join([str.str, addition.str], " ") ==x
+  end
+
+  test "join AnnotatedString with string" do
+    str= test_sentence
+    addition= "just added another sentence."
+    ret = AnnotatedString.join [str, addition]
+    assert Enum.join([str.str, addition], " ") ==AnnotatedString.to_string(ret)
+  end
+  test "join string with string" do
+    str= @sentence_string
+    addition= "just added another sentence."
+    ret = AnnotatedString.join [str, addition]
+    assert Enum.join([str, addition], " ") ==AnnotatedString.to_string(ret)
+    assert [%Annotation{tags: [:joiner]}] = ret.annotations
+  end
+  test "join with empty joiner" do
+    str= @sentence_string
+    addition= "just added another sentence."
+    ret = AnnotatedString.join [str, addition], ""
+    assert Enum.join([str, addition]) ==AnnotatedString.to_string(ret)
+    assert [] == ret.annotations
+  end
+
 end

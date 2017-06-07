@@ -33,7 +33,7 @@ defmodule Annotations.List do
   end
   def scan(str, %Regex{}=re, ann_creator) when is_bitstring(str) and is_function(ann_creator) do
     Regex.scan(re, str, return: :index)
-    |> Enum.map( fn match_set -> 
+    |> Enum.map( fn match_set ->
         match_set
         |>Stream.map( fn match -> grapheme_match_indexes(str,match) end)
         |>Enum.map(fn {from,len}-> {from, from+len} end)
@@ -135,5 +135,68 @@ defmodule Annotations.List do
       false
     end
   end
+  defp reduce_stack(stack, to) do
+    Enum.reduce(stack, {nil, []} , fn ann, {last_to, new_stack} -> 
+      new_stack=
+      if ann.to < to do
+        new_stack
+      else
+        [ann]++new_stack
+      end
+      if is_nil(last_to) do
+        {ann.to,stack}
+      else
+        {max(ann.to, last_to), stack}
+      end
+    end)
+  end
+  def select_annotation_ranges( list, consider? \\ fn _ -> true end , options \\[]) do
+    list=
+      unless options[:sorted] do
+        Enum.sort_by(list, &(&1.from))
+      else
+        list
+      end
+    {stack,ranges}=
+    Enum.reduce(list, {[], []}, fn
+      ann, {stack, ranges}->
+        {open, ranges}=
+        case ranges do
+          []-> {nil,[]}
+          [open|ranges] when is_integer(open)-> {open,ranges}
+          ranges -> {nil, ranges}
+        end
+        {prev_last,new_stack}=reduce_stack(stack, ann.from)
+        if consider?.(ann) do
+          cond do
+            is_nil(prev_last) -> {[ann], [ann.from]++ranges}
+            prev_last < ann.from ->   {[ann], [ann.from,{open, prev_last}]++ranges}
+            true->{new_stack++[ann], [open]++ranges}
+          end
+        else
+          cond do
+            is_nil(prev_last)-> {[], ranges}
+            prev_last < ann.from -> {[], [{open,prev_last}]++ranges}
+            true->{new_stack, [open]++ranges}
+          end
+        end
+    end)
+    prev_last = Enum.reduce( stack, 0, fn ann,acc -> max(ann.to, acc) end)
+    if prev_last do
+      case ranges do
+        [open| ranges] when is_integer(open) -> [{open,prev_last}]++ ranges #close last range
+        ranges ->
+          if prev_last do
+            ##when we have a prev_last we must also have an open
+            require IEx
+            IEx.pry
+          end
+          ranges  #no open range
+      end
+    else
+      ranges
+    end
+    |> Enum.reverse()
 
+  end
 end
