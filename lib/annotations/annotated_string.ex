@@ -343,5 +343,21 @@ defmodule Annotations.AnnotatedString do
       |> Enum.sort_by(&( &1.from))
     %__MODULE__{str| annotations: annotations}
   end
-
+  def trim_leading(%__MODULE__{str: str, annotations: anns}=ann_str, to_trim \\ nil) do
+    trimmed_str=
+      if is_nil(to_trim) do
+        String.trim_leading(str)
+      else
+        String.trim_leading(str,to_trim)
+      end
+    diff = String.length(trimmed_str)- String.length(str)
+    if diff == 0 do
+      ann_str
+    else
+      %__MODULE__{ann_str|
+        str: trimmed_str,
+        annotations: Enum.map(anns , &(Annotation.offset(&1,diff))) |> Enum.filter(&(&1))
+      }
+    end
+  end
 end
