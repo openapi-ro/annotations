@@ -8,7 +8,7 @@ defmodule AnnotatedStringTest do
     AnnotatedString.new(str)
       |>AnnotatedString.tag_all(~r/[.]/ , :punctuation)
       |>AnnotatedString.tag_all(~r/[^.[:space:]]+[^.]+/ , :sentence)
-      |>AnnotatedString.tag_all(~r/[[:alnum:]]+[[:space:].]/ , :word)
+      |>AnnotatedString.tag_all(~r/[[:alnum:]]+/ , :word)
   end
   test "tag_all" do
     str= test_sentence
@@ -60,6 +60,72 @@ defmodule AnnotatedStringTest do
     ret = AnnotatedString.join [str, addition], ""
     assert Enum.join([str, addition]) ==AnnotatedString.to_string(ret)
     assert [] == ret.annotations
+  end
+  test "split_at" do
+    str= @sentence_string
+    addition= "just added another sentence."
+    ann_str = test_sentence str<>addition
+    ann_str= AnnotatedString.add_annotations(ann_str, [Annotation.new(0, AnnotatedString.length(ann_str), :all)])
+    {left, right} = AnnotatedString.split_at(ann_str, String.length(str))
+    assert left.annotations == Enum.filter(left.annotations, &(&1)) # no nils
+    assert right.annotations == Enum.filter(right.annotations, &(&1)) # no nils
+    assert ann_str.annotations == Enum.filter(ann_str.annotations, &(&1)) # no nils
+
+
+    assert Enum.count(ann_str.annotations, &(Enum.member?(&1.tags, :word))) ==10
+    assert Enum.count(left.annotations, &(Enum.member?(&1.tags, :word))) ==6
+    assert Enum.count(right.annotations, &(Enum.member?(&1.tags, :word))) ==4
+
+    assert Enum.count(ann_str.annotations, &(Enum.member?(&1.tags, :all))) == 1
+    assert Enum.count(left.annotations, &(Enum.member?(&1.tags, :all))) == 1
+    assert Enum.count(right.annotations, &(Enum.member?(&1.tags, :all))) == 1
+
+
+    #test that the annotation :all has been correctly split
+    [left_all_ann]=Enum.filter(left.annotations, &(Enum.member?(&1.tags, :all)))
+    [right_all_ann]=Enum.filter(right.annotations, &(Enum.member?(&1.tags, :all)))
+    [ann_str_all_ann]= Enum.filter(ann_str.annotations, &(Enum.member?(&1.tags, :all)))
+    assert AnnotatedString.length(ann_str)== AnnotatedString.length(left) + AnnotatedString.length(right)
+    assert left_all_ann.to == AnnotatedString.length(left)
+    assert left_all_ann.from == 0
+    assert right_all_ann.to == AnnotatedString.length(right)
+    assert right_all_ann.from == 0
+    assert ann_str_all_ann.to == AnnotatedString.length(ann_str)
+    assert ann_str_all_ann.from == 0
+  end
+  test "split_by_tags" do
+    str= @sentence_string
+    addition= "just added another sentence."
+    ann_str = test_sentence str<>addition
+    ann_str= AnnotatedString.add_annotations(ann_str, [Annotation.new(0, AnnotatedString.length(ann_str), :all)])
+    require IEx
+    IEx.pry
+    [left,right]=AnnotatedString.split_by_tags(ann_str, :sentence)
+    assert left.annotations == Enum.filter(left.annotations, &(&1)) # no nils
+    assert right.annotations == Enum.filter(right.annotations, &(&1)) # no nils
+    assert ann_str.annotations == Enum.filter(ann_str.annotations, &(&1)) # no nils
+
+
+    assert Enum.count(ann_str.annotations, &(Enum.member?(&1.tags, :word))) ==10
+    assert Enum.count(left.annotations, &(Enum.member?(&1.tags, :word))) ==6
+    assert Enum.count(right.annotations, &(Enum.member?(&1.tags, :word))) ==4
+
+    assert Enum.count(ann_str.annotations, &(Enum.member?(&1.tags, :all))) == 1
+    assert Enum.count(left.annotations, &(Enum.member?(&1.tags, :all))) == 1
+    assert Enum.count(right.annotations, &(Enum.member?(&1.tags, :all))) == 1
+
+
+    #test that the annotation :all has been correctly split
+    [left_all_ann]=Enum.filter(left.annotations, &(Enum.member?(&1.tags, :all)))
+    [right_all_ann]=Enum.filter(right.annotations, &(Enum.member?(&1.tags, :all)))
+    [ann_str_all_ann]= Enum.filter(ann_str.annotations, &(Enum.member?(&1.tags, :all)))
+    assert AnnotatedString.length(ann_str)== AnnotatedString.length(left) + AnnotatedString.length(right)
+    assert left_all_ann.to == AnnotatedString.length(left)
+    assert left_all_ann.from == 0
+    assert right_all_ann.to == AnnotatedString.length(right)
+    assert right_all_ann.from == 0
+    assert ann_str_all_ann.to == AnnotatedString.length(ann_str)
+    assert ann_str_all_ann.from == 0
   end
 
 end
