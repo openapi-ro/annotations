@@ -360,4 +360,7 @@ defmodule Annotations.AnnotatedString do
       }
     end
   end
+  def annotations_for_tags(%__MODULE__{annotations: anns}, tags ) do
+    Annotations.List.filter_tags(anns,tags)
+  end
 end

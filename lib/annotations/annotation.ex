@@ -1,13 +1,34 @@
 defmodule Annotations.Annotation do
-  @doc """
-  Module defining annotations for a String buffer.
+  @moduledoc """
+  Module defining annotations for a String buffer. Use this to annotate Strings.
 
-  Use this to annotate Strings
+  An  annotation associates a range delimited by
+
+   * `from` represents the first index [inclusive]
+   * `to` represents one past the last index [exclusive]
+
+   with information structured as:
+
+   * `tags` a list of atoms
+   * `info` A `Map` which might contain any content
+
+  **Note**: The string is not stored in a `Annotations.Annotation`.
+
+  See `Annotations.AnnotatedString` for a struct and functions working with both 
+  the `String` and the associated Annotations
+
   """
   defstruct from: nil,
     to: nil,
     tags: [],
     info: nil
+
+  @type t :: %{
+    to: integer,
+    from: integer,
+    tags: [atom],
+    info: Map.t
+  }
 
   def new(from,to, tags \\:default, info \\nil) do
     unless is_list(tags) do

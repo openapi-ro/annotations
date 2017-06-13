@@ -199,4 +199,31 @@ defmodule Annotations.List do
     |> Enum.reverse()
 
   end
+  defp check_single_tag_fun(tag) do
+    fn
+      %Annotation{tags: [^tag|_] } -> true
+      %Annotation{tags: [] } -> false
+      %Annotation{tags: cmp } -> MapSet.member?(MapSet.new(cmp), tag)
+    end
+  end
+  def filter_tags(list, tags) do
+    fun=
+      case tags do
+        tag when is_atom(tags) -> check_single_tag_fun(tag)
+        [tag] when is_atom(tag) ->check_single_tag_fun(tag)
+        tags ->
+            tags= MapSet.new(tags)
+            fn
+              %Annotation{tags: [] } -> false
+              %Annotation{tags: cmp } -> not MapSet.disjoint?(MapSet.new(cmp), tags)
+            end
+      end
+    list
+    |> filter( fun )
+  end
+
+  def filter(list, fun) do
+    list
+    |> Enum.filter(fun)
+  end
 end

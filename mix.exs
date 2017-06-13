@@ -7,7 +7,15 @@ defmodule Annotations.Mixfile do
      elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
-     deps: deps()]
+     deps: deps(),
+     package: [
+      maintainers: ["Paul Balomiri", "paul.balomiri@gmail.com"],
+      description: "String Annotation Package",
+      licenses: ["WTFPL"],
+      links: %{"GitHub" => "https://github.com/openapi-ro/annotations"}
+     ]
+
+    ]
   end
 
   # Configuration for the OTP application
@@ -28,6 +36,6 @@ defmodule Annotations.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    []
+    [{:ex_doc, ">= 0.0.0", only: :dev}]
   end
 end
