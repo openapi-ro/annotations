@@ -31,6 +31,14 @@ defmodule Annotations.AnnotatedString do
   alias Annotations.Annotation
   defstruct str: nil,
     annotations: []
+  def md5(%__MODULE__{str: str}) do
+    :crypto.hash(:md5, str)
+  end
+  def md5_str(%__MODULE__{}=ann_str) do
+    ann_str
+    |> md5()
+    |>Base.encode16()
+  end
   def new({str,annotations}) do
     %__MODULE__{str: str, annotations: annotations}
   end
