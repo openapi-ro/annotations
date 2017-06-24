@@ -29,7 +29,9 @@ defmodule Annotations.Annotation do
     tags: [atom],
     info: Map.t
   }
-
+  @doc """
+    Creates a new Annotation
+  """
   def new(from,to, tags \\:default, info \\nil) do
     unless is_list(tags) do
       tags=[tags]

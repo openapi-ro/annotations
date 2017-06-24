@@ -37,7 +37,7 @@ defmodule Annotations.AnnotatedString do
   def md5_str(%__MODULE__{}=ann_str) do
     ann_str
     |> md5()
-    |>Base.encode16()
+    |> Base.encode16()
   end
   def new({str,annotations}) do
     %__MODULE__{str: str, annotations: annotations}
@@ -293,7 +293,7 @@ defmodule Annotations.AnnotatedString do
     if consider do
       Annotations.List.disjoint?(anns, consider)
     else
-      Annotations.List.disjoint(anns)
+      Annotations.List.disjoint?(anns)
     end
   end
   @doc """

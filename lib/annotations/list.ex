@@ -1,5 +1,6 @@
 defmodule Annotations.List do
   alias Annotations.Annotation
+  require Logger
   @doc """
     Operations on lists of Annotations
   """
@@ -188,8 +189,9 @@ defmodule Annotations.List do
         ranges ->
           if prev_last do
             ##when we have a prev_last we must also have an open
-            require IEx
-            IEx.pry
+            Logger.error("prev_last without a previous open. Error???")
+            #require IEx
+            #IEx.pry
           end
           ranges  #no open range
       end
