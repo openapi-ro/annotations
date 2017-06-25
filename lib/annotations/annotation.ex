@@ -32,7 +32,22 @@ defmodule Annotations.Annotation do
   @doc """
     Creates a new Annotation
   """
-  def new(from,to, tags \\:default, info \\nil) do
+  def new({from,to}, tags ,info) do
+    unless is_list(tags) do
+      tags=[tags]
+    end
+    %__MODULE__{from: from, to: to, tags: tags, info: info}
+  end
+  def new({from,to}, tags) do
+    new(from,to, tags,nil)
+  end
+  def new({from,to}) do
+    new(from,to, [],nil)
+  end
+  def new(from,to,tags) do
+    new(from,to,tags,nil)
+  end
+  def new(from,to, tags , info ) do
     unless is_list(tags) do
       tags=[tags]
     end
@@ -102,6 +117,11 @@ defmodule Annotations.Annotation do
   def str(%__MODULE__{}=ann, str) when is_bitstring(str) do
     {chunk,_} = String.split_at(str,ann.to)
     {_,chunk} = String.split_at(chunk,ann.from)
+    chunk
+  end
+  def str({from,to}, str) when is_bitstring(str) do
+    {chunk,_} = String.split_at(str,to)
+    {_,chunk} = String.split_at(chunk,from)
     chunk
   end
   def split_annotated_buffer(buffer, annotations, split_pos, options\\[]) when is_bitstring(buffer) and is_integer(split_pos) do

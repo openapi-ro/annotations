@@ -7,6 +7,9 @@ defmodule Annotations.List do
   def tag(str,%Regex{}=re) do
     tag(str,re, [:default])
   end
+  def tag(str,%Regex{}=re , fun) when is_function(fun) do
+    scan(str, re, fun)
+  end
   def tag(str,%Regex{}=re , tags) when is_list(tags) do
     scan(str, re, fn [{from,to}] -> Annotation.new(from,to,tags) end)
   end
