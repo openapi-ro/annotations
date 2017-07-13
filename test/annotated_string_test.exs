@@ -11,7 +11,7 @@ defmodule AnnotatedStringTest do
       |>AnnotatedString.tag_all(~r/[[:alnum:]]+/ , :word)
   end
   test "tag_all" do
-    str= test_sentence
+    str= test_sentence()
     ex = AnnotatedString.extract_annotations(str, :sentence)
     assert ["first second third" , "fourth fifth sixth"] == Enum.map(ex,&AnnotatedString.to_string/1)
   end
@@ -22,7 +22,7 @@ defmodule AnnotatedStringTest do
     assert AnnotatedString.disjoint?(str, [:sentence, :word]) ==false
   end
   test "split with regex" do
-    str= test_sentence
+    str= test_sentence()
     fragments= AnnotatedString.split test_sentence, ~r/[[:space:]]/
     assert String.split(@sentence_string) == Enum.map(fragments , &AnnotatedString.to_string/1)
 
@@ -34,7 +34,7 @@ defmodule AnnotatedStringTest do
 
   end
   test "join two AnnotatedString" do
-    str= test_sentence
+    str= test_sentence()
     addition= test_sentence "just added another sentence."
     ret = AnnotatedString.join [str, addition]
     x=AnnotatedString.to_string(ret)
@@ -42,7 +42,7 @@ defmodule AnnotatedStringTest do
   end
 
   test "join AnnotatedString with string" do
-    str= test_sentence
+    str= test_sentence()
     addition= "just added another sentence."
     ret = AnnotatedString.join [str, addition]
     assert Enum.join([str.str, addition], " ") ==AnnotatedString.to_string(ret)
