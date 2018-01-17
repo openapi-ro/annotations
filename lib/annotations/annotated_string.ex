@@ -154,7 +154,7 @@ defmodule Annotations.AnnotatedString do
     str_chunks
     |>Enum.reduce({with_captures,[], ann}, fn
         str_chunk, {with_captures,result, ann} ->
-          {last_chunk, idx, result, annotations} =
+          {_last_chunk, idx, result, annotations} =
           with_captures
           |>Stream.with_index()
           |>Enum.reduce_while( {str_chunk,result,ann},fn
