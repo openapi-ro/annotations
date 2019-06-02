@@ -16,9 +16,52 @@ defmodule Annotations.List do
   def tag(str,%Regex{}=re , tag) do
     tag(str,re, [tag])
   end
+  def sort([%Annotation{}|_more_annotations]=list) do
+    Enum.sort_by(list, &(&1.from))
+  end
+  defmacro ranges_overlap(a, b) do
+    quote do
+      is_tuple(unquote(a)) and is_tuple(unquote(b)) and tuple_size(unquote(a))==2 and tuple_size(unquote(b)) == 2 and
+      (
+        (
+          elem(unquote(a),0) <= elem(unquote(b),0) and elem(unquote(a),1) >= elem(unquote(b),0)
+        ) or (
+          elem(unquote(a),0) < elem(unquote(b),1) and elem(unquote(a),1) >= elem(unquote(b),1)
+        ) or (
+          elem(unquote(a),0) >= elem(unquote(b),0) and elem(unquote(a),1) <= elem(unquote(b),1)
+        )
+      )
+    end
+  end
+  @doc """
+    Same as &extract_ranges/2 but for a single range
+  """
+  def extract_range([%Annotation{}|_rest]=anns,{from,to}=range), do: extract_ranges(anns, [range])
+  @doc """
+    Extracts the annotations which overlap with any of the ranges supplied in sorted_ranges.
 
-
-
+  """
+  def extract_ranges(anns, sorted_ranges) do
+    {result,_remaining}=
+      sorted_ranges
+      |>Enum.reduce_while({[], anns}, fn {from,to}=range, {result,remaining}->
+        {result,remaining}=
+          remaining
+          |> Enum.reduce({result, []}, fn
+            %Annotation{to: ann_to}, {result, remaining} when ann_to<=from ->
+              {result,remaining}
+            %Annotation{from: ann_from, to: ann_to}=ann, {result, remaining} when ranges_overlap({ann_from, ann_to}, range) ->
+              {[ann|result], remaining}
+            %Annotation{from: ann_from, to: ann_to}=ann, {result,remaining} ->
+              {result , [ann|remaining]}
+            end)
+        case remaining do
+          [] -> {:halt, {result,[]}}
+          remaining -> {:cont, {result,Enum.reverse(remaining)}}
+        end
+      end)
+    result
+  end
   defp get_index(_string, {pos, _len}) when pos < 0 do
     ""
   end
@@ -57,8 +100,8 @@ defmodule Annotations.List do
       exclude_ann
       |> Stream.filter( &(Annotation.length(&1)!=0))
       |> Enum.sort_by( &(&1.from))
-      |> Enum.reduce( %{cur: 0, ranges: []} , fn 
-          %Annotation{from: from, to: to }, 
+      |> Enum.reduce( %{cur: 0, ranges: []} , fn
+          %Annotation{from: from, to: to },
           %{cur: cur}=acc  when (
             cur<from
             )->
@@ -116,7 +159,7 @@ defmodule Annotations.List do
     ret=
       list
       |> Enum.reduce_while( nil, fn
-          ann, nil-> 
+          ann, nil->
             if consider_func.(ann) do
               {:cont,ann}
             else
@@ -140,7 +183,7 @@ defmodule Annotations.List do
     end
   end
   defp reduce_stack(stack, to) do
-    Enum.reduce(stack, {nil, []} , fn ann, {last_to, new_stack} -> 
+    Enum.reduce(stack, {nil, []} , fn ann, {last_to, new_stack} ->
       new_stack=
       if ann.to < to do
         new_stack

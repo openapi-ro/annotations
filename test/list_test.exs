@@ -3,7 +3,7 @@ defmodule ListTest do
   alias Annotations.Annotation
   alias Annotations.List
   use ExUnit.Case
-  doctest Annotations
+  #doctest Annotations
   @alphabet "abcdefghijklmnopqrstuvwxyz"
   @ro_alphabet "aăâbcdefghiîjklmnopqrsștțuvwxyz"
 

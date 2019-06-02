@@ -62,6 +62,9 @@ defmodule Annotations.AnnotatedString do
     MapSet.difference(str_funcs,
       MapSet.new(__MODULE__.__info__(:functions)))
   end
+  def scan(%__MODULE__{str: str, annotations: _anns} ,%Regex{}=re, fun) do
+    Annotations.List.tag(str,re,fun)
+  end
   # A lot of functions must still be implemented
   use Annotations.AnnotatedString.StringImporter, [
     length: 1,
@@ -139,54 +142,64 @@ defmodule Annotations.AnnotatedString do
     splits the Annotated string in two. Each String keeps the Annotations referring to itsaelf.
     Annotations spanning split boundaries are duplicated to each neighboring chunk
   """
-  def split(%__MODULE__{str: str, annotations: ann}, splitter, orig_options \\[]) do
-    options=
-      orig_options
-      |> Keyword.merge([include_captures: true])
-    with_captures=String.split(str, splitter, options)
-    str_chunks =
-      if orig_options[:include_captures] do
-        with_captures
-      else
-        String.split(str,splitter,orig_options)
-      end
-    {_,ret,_}=
-    str_chunks
-    |>Enum.reduce({with_captures,[], ann}, fn
-        str_chunk, {with_captures,result, ann} ->
-          {_last_chunk, idx, result, annotations} =
-          with_captures
-          |>Stream.with_index()
-          |>Enum.reduce_while( {str_chunk,result,ann},fn
-            {first,idx},{ str_chunk, result, annotations} when first == str_chunk->
-              str_chunk_len = String.length(first)
-              chunk_annotations=
-                annotations
-                |> Stream.map( &(Annotation.crop_overlap(&1, 0, str_chunk_len)))
-                |> Enum.filter(&(&1))
-              prev_ann = annotations
-              annotations =
-                annotations
-                |> Stream.filter(&(&1.to > str_chunk_len)) # remove annotations only applying to previous chunks
-                |> Stream.map(&(Annotation.offset(&1,str_chunk_len)))
-                |> Enum.filter(&(&1)) #take out nils
-              new_ann= %__MODULE__{str: first, annotations: chunk_annotations }
-              {:halt,{str_chunk,idx+1,result++[new_ann], annotations}}
-            {first,idx},{ str_chunk, result, annotations}->
-              str_chunk_len = String.length(first)
-              annotations =
-                annotations
-                |> Stream.filter(&(&1.to > str_chunk_len)) # remove annotations only applying to previous chunks
-                |> Stream.map(&(Annotation.offset(&1,str_chunk_len)))
-                |> Enum.filter(&(&1)) #take out nils
-              {:cont ,{str_chunk,result, annotations}}
-          end)
-          {_,with_captures}=Enum.split(with_captures,idx)
-          {with_captures, result, annotations}
-      end)
-    ret
-  end
+  def split(%__MODULE__{}=ann_str, splitter) , do: split(ann_str,splitter,[])
+  def split(%__MODULE__{str: str, annotations: anns}, splitter, orig_options ) when is_bitstring(splitter) do
+    splitter_len =String.length(splitter)
 
+    {_,ret,_}=
+      String.split(str,splitter,orig_options)
+      |>Enum.reduce({0,[], anns}, fn
+          str_chunk, {start_idx,result, anns} ->
+            chunk_len=String.length(str_chunk)
+            chunk_anns =
+              anns
+              |> Enum.filter(fn %Annotation{to: to} ->
+                to<= start_idx + chunk_len
+              end)
+              |>Enum.map(fn ann ->
+                case Annotation.offset(ann, -start_idx) do
+                  nil->nil
+                  %Annotation{ to: to} = ann when to > chunk_len -> %Annotation{ann| to: chunk_len}
+                  %Annotation{}= ann -> ann
+                end
+              end)
+              |>Enum.filter(&(&1)) # nils represent annotations which apply to previous chunks only
+            new_start_idx=start_idx+chunk_len+splitter_len
+            #filter initial annotations to remove
+            anns =
+              anns
+              |>Enum.filter(&(&1.to > new_start_idx))
+            {new_start_idx, [new(str_chunk, chunk_anns)|result], anns}
+        end)
+    Enum.reverse(ret)
+  end
+  def split(%__MODULE__{str: str, annotations: anns}, %Regex{}=splitter, orig_options) do
+    limits=
+      str
+      #first scan for the setaratord
+      |>Annotations.List.scan(splitter, fn [splitter_pos] -> splitter_pos end)
+      #then invert the ranges, selecting those between the separator
+      |>Rangex.RangeList.gaps( {0, String.length(str)})
+      #then build the Annotated strings
+    limits
+    |> Enum.map( fn {from,to}=range ->
+      chunk_anns=
+        anns
+        |>Annotations.List.extract_range(range)
+        |>Enum.map( fn %Annotation{}=ann ->
+            chunk_len=to-from
+            case Annotations.Annotation.offset(ann,-from) do
+              nil-> nil
+              %Annotation{ to: to} = ann when to > chunk_len -> %Annotation{ann| to: chunk_len}
+              %Annotation{}= ann -> ann
+            end
+        end)
+        new(
+          String.slice(str, from, to-from),
+          chunk_anns
+          )
+      end)
+  end
   def split_by_tags(%__MODULE__{}=str,tags) do
     split_by_tags(str,tags,[])
   end
@@ -204,7 +217,7 @@ defmodule Annotations.AnnotatedString do
     end
     options = Keyword.put(options, :split, Keyword.get(options,:split, :after))
     match_result = options[:split]
-    split_by_annotation(str, fn str, ann -> 
+    split_by_annotation(str, fn str, ann ->
       included? =
         case ann.tags do
           []-> false
@@ -239,7 +252,7 @@ defmodule Annotations.AnnotatedString do
         |> Enum.uniq()
       {chunks, first}=
       split_points
-      |> Enum.reduce( {[],ann_str} , fn  point, {list, str} -> 
+      |> Enum.reduce( {[],ann_str} , fn  point, {list, str} ->
         {left,right}= __MODULE__.split_at(str, point)
         {[right|list], left}
         end)
@@ -248,6 +261,23 @@ defmodule Annotations.AnnotatedString do
   def split_at(%__MODULE__{str: str, annotations: anns}, where) when is_integer(where) do
     [first,last]= Annotation.split_annotated_buffer(str, anns, where)
     { new(first), new(last)}
+  end
+  @doc """
+    Annotates all parts of the string with `tags_to_add` using an inverse map for `tags_to_exclude`
+  """
+  def tag_all_except(%__MODULE__{}=ann_str, tags_to_exclude, tag_to_add) when not is_list(tag_to_add),
+    do: tag_all_except(ann_str,tags_to_exclude, [tag_to_add])
+  def tag_all_except(%__MODULE__{}=ann_str, tag_to_exclude, tags_to_add) when not is_list(tag_to_exclude),
+    do: tag_all_except(ann_str,[tag_to_exclude], tags_to_add)
+  def tag_all_except(%__MODULE__{}=ann_str, tags_to_exclude=[_first|_rest], tags_to_add) do
+    annotations_to_exclude =
+      ann_str.annotations
+      |> Enum.filter( fn
+          %Annotation{ tags: tags} ->
+            Enum.any?(tags, &(Enum.member?(tags_to_exclude, &1)))
+        end)
+    new_annotations= Annotations.List.tag_all_except(ann_str.str, annotations_to_exclude,  tags_to_add)
+    add_annotations(ann_str,new_annotations)
   end
   def tag_all(%__MODULE__{str: str, annotations: ann}=arg, %Regex{}=re, tag\\:default ) do
       %__MODULE__{arg| annotations: ann++ Annotations.List.tag(str, re, tag)}
@@ -263,7 +293,7 @@ defmodule Annotations.AnnotatedString do
   def extract_annotations(%__MODULE__{str: str, annotations: anns}=arg,%MapSet{}=tags, options)  do
     ret=
       anns
-      |> Enum.filter( fn 
+      |> Enum.filter( fn
           %Annotation{ tags: [tag]} -> MapSet.member? tags,tag
           %Annotation{ tags: []} ->false
           %Annotation{ tags: ann_tags} -> not MapSet.disjoint?(MapSet.new(ann_tags), tags)
@@ -370,5 +400,69 @@ defmodule Annotations.AnnotatedString do
   end
   def annotations_for_tags(%__MODULE__{annotations: anns}, tags ) do
     Annotations.List.filter_tags(anns,tags)
+  end
+  def string_for_annotation(%__MODULE__{str: str}, %Annotation{from: from, to: to} ) do
+    String.slice(str, from, to-from)
+  end
+  @doc """
+  trims the annotation range (leading and trailing) for any annotations tagged with a tag in tags
+
+  Note that this function only trims the `Annotation` structs tagged with any tag in `tags`. It does **not** trim the `AnnotatedString` struct itself.
+  """
+  def trim_annotations(%__MODULE__{str: str, annotations: anns}, tags) do
+    trimmed_anns=
+      anns
+      |> Enum.map(fn %Annotation{from: from, to: to}=ann->
+        if is_nil(tags) or Enum.any?(ann.tags , &( Enum.member?(tags, &1))) do
+          slice = String.slice(str, from, to-from)
+          slice_len=String.length slice
+          front_offset= slice_len - String.length( String.trim_leading(slice))
+          back_offset = slice_len - String.length( String.trim_trailing(slice))
+          %Annotation{ann|from: ann.from+front_offset, to: ann.to-back_offset}
+        else
+          ann
+        end
+      end)
+    new(str,trimmed_anns)
+  end
+  defp do_filter_by_tags(anns, nil), do: anns
+  defp do_filter_by_tags(anns, tag) when is_bitstring(tag)  or is_atom(tag) do
+    Enum.filter(anns, &(Enum.member?(&1.tags, tag)))
+  end
+  defp do_filter_by_tags(anns, [tag]) when is_bitstring(tag)  or is_atom(tag) do
+    do_filter_by_tags(anns,tag)
+  end
+  defp do_filter_by_tags(anns, tags) when is_list(tags) do
+    do_filter_by_tags(anns,MapSet.new(tags))
+  end
+  defp do_filter_by_tags(anns, %MapSet{}=tags) when is_list(tags) do
+    anns
+    |> Enum.filter(fn
+        %Annotation{tags: [tag]} ->
+          MapSet.member?(tags,tag)
+        %Annotation{tags: ann_tags} ->
+            not MapSet.disjoint?(tags, MapSet.new(ann_tags))
+        end)
+  end
+  @doc """
+    maps the list of annotations to the output of fun.
+    if tags are non-`nil` only the annotations marked with those `tags` will be supplied to `fun`
+
+    `fun` can receive one or two arguments and will be called as either one of:
+    * fun.(annotation)
+    * fun.(annotation, string)
+
+    The result is a list with each return value from `fun`.
+  """
+  def map_tags(%__MODULE__{str: str, annotations: anns}, tags, fun) do
+    functor_arity = :erlang.fun_info(fun)[:arity]
+    anns
+    |> do_filter_by_tags(tags)
+    |> Enum.map( fn %Annotation{from: from, to: to}=ann ->
+      case functor_arity do
+        1-> fun.(ann)
+        2-> fun.(ann, String.slice(str, from, to-from))
+      end
+    end)
   end
 end
