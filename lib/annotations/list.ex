@@ -115,7 +115,7 @@ defmodule Annotations.List do
 
     case acc do
       %{ranges: [last| rest], cur: cur} when cur<str_len ->
-        Enum.reverse([{cur,str_len}]++last++rest)
+        Enum.reverse([{cur,str_len}]++[last|rest])
       _-> Enum.reverse(acc.ranges)
     end
     |> Enum.map( fn {from,to}-> tag_creator.(from,to) end)
