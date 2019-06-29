@@ -78,8 +78,20 @@ defmodule Annotations.List do
           {String.length(pre),
           String.length(match)}
   end
-  def scan(str, %Regex{}=re, ann_creator) when is_bitstring(str) and is_function(ann_creator) do
-    Regex.scan(re, str, return: :index)
+  def scan(str, %Regex{}=re, ann_creator, options \\ [return: :index]) when is_bitstring(str) and is_function(ann_creator) do
+    options=
+      if is_nil(options) do
+        Logger.warn("#{__MODULE__}.scan: Forced options argument to [return: :index] because it was nil")
+        [return: :index]
+      else
+        case Keyword.get( options, :return) do
+          :index-> options
+          nil->
+            Logger.warn("#{__MODULE__}.scan: Force-added options argument {return: :index} because it was missing")
+            Keyword.put(options, :return, :index)
+        end
+      end
+    Regex.scan(re, str,options)
     |> Enum.map( fn match_set ->
         match_set
         |>Stream.map( fn match -> grapheme_match_indexes(str,match) end)
