@@ -7,15 +7,27 @@ defmodule Annotations.List do
   def tag(str,%Regex{}=re) do
     tag(str,re, [:default])
   end
-  def tag(str,%Regex{}=re , fun) when is_function(fun) do
-    scan(str, re, fun)
+  def tag(str,%Regex{}=re , fun ) when is_function(fun) do
+    scan(str, re, fun, [return: :index])
   end
-  def tag(str,%Regex{}=re , tags) when is_list(tags) do
-    scan(str, re, fn [{from,to}] -> Annotation.new(from,to,tags) end)
+  def tag(str,%Regex{}=re , tags) when is_list(tags)  do
+    scan(str, re, fn [{from,to}] -> Annotation.new(from,to,tags) end, [return: :index])
   end
   def tag(str,%Regex{}=re , tag) do
     tag(str,re, [tag])
   end
+  def tag(str,%Regex{}=re , fun, scan_options) when is_function(fun) and is_list(scan_options)do
+    scan(str, re, fun, scan_options)
+  end
+  def tag(str,%Regex{}=re , tags, scan_options) when is_list(tags) and is_list(scan_options) do
+    scan(str, re, fn [{from,to}] -> Annotation.new(from,to,tags) end, scan_options)
+  end
+  def tag(str,%Regex{}=re , tag, scan_options) when is_list(scan_options) do
+    tag(str, re, [tag], scan_options)
+  end
+
+  def sort([]), do: []
+  def sort([%Annotation{}]=list), do: list
   def sort([%Annotation{}|_more_annotations]=list) do
     Enum.sort_by(list, &(&1.from))
   end
@@ -100,13 +112,19 @@ defmodule Annotations.List do
       end)
     |> List.flatten()
   end
-  def tag_all_except(str, [%Annotation{}|_rest]=exclude_ann, tags) when is_list(tags) do
+  def tag_all_except(str,[], tag) when is_atom(tag) and is_bitstring(str) do
+    tag_all_except(str,[],[tag])
+  end
+  def tag_all_except(str,[], tags) when is_list(tags) and is_bitstring(str) do
+    [%Annotation{from: 0, to: String.length(str), tags: tags}]
+  end
+  def tag_all_except(str, [%Annotation{}|_rest]=exclude_ann, tags) when is_list(tags) and is_bitstring(str) do
     annotate_all_except(str,exclude_ann, fn  from,to -> %Annotation{from: from, to: to, tags: tags} end)
   end
   def tag_all_except(str, [%Annotation{}|_rest]=exclude_ann, tag) do
     tag_all_except(str,exclude_ann,[tag])
   end
-  def annotate_all_except(str, [%Annotation{}|_rest]=exclude_ann, tag_creator) when is_function(tag_creator) do
+  def annotate_all_except(str, [%Annotation{}|_rest]=exclude_ann, tag_creator) when is_function(tag_creator) and is_bitstring(str) do
     str_len = String.length(str)
     acc=
       exclude_ann

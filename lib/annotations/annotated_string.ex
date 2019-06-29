@@ -280,7 +280,13 @@ defmodule Annotations.AnnotatedString do
     add_annotations(ann_str,new_annotations)
   end
   def tag_all(%__MODULE__{str: str, annotations: ann}=arg, %Regex{}=re, tag\\:default ) do
-      %__MODULE__{arg| annotations: ann++ Annotations.List.tag(str, re, tag)}
+      tag_all(arg, re, tag, [return: :index])
+  end
+  def tag_all(%__MODULE__{str: str, annotations: ann}=arg, %Regex{}=re, tag, scan_options ) do
+    anns =
+      (ann ++ Annotations.List.tag(str, re, tag, scan_options))
+      |>Annotations.List.sort()
+    %__MODULE__{arg| annotations: anns}
   end
   def extract_annotations(str,tags) do
     extract_annotations(str, tags, [])
