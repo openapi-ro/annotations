@@ -14,7 +14,7 @@ defmodule Annotations.Annotation do
 
   **Note**: The string is not stored in a `Annotations.Annotation`.
 
-  See `Annotations.AnnotatedString` for a struct and functions working with both 
+  See `Annotations.AnnotatedString` for a struct and functions working with both
   the `String` and the associated Annotations
 
   """
@@ -41,6 +41,10 @@ defmodule Annotations.Annotation do
   def new({from,to}, tags) do
     new(from,to, tags,nil)
   end
+  def new({from,to}, tags, info) do
+    new(from,to, tags,info)
+  end
+
   def new({from,to}) do
     new(from,to, [],nil)
   end
@@ -48,8 +52,11 @@ defmodule Annotations.Annotation do
     new(from,to,tags,nil)
   end
   def new(from,to, tags , info ) do
+    tags=
     unless is_list(tags) do
-      tags=[tags]
+      [tags]
+    else
+      tags
     end
     %__MODULE__{from: from, to: to, tags: tags, info: info}
   end
@@ -138,7 +145,7 @@ defmodule Annotations.Annotation do
       {first,last}=String.split_at(buffer, split_pos)
       [first_ann,last_ann] =
         [{first, 0, split_pos} ,{last,split_pos,buf_len}]
-        |> Enum.map( fn {_str, f, t} -> 
+        |> Enum.map( fn {_str, f, t} ->
             annotations
             |> Stream.filter(&(&1))
             |> Stream.map( fn ann ->
@@ -150,7 +157,7 @@ defmodule Annotations.Annotation do
             end)
             |> Enum.filter(fn
               nil->false
-              %__MODULE__{from: from, to: to} when allow_empty_range==false and from ==to -> false  
+              %__MODULE__{from: from, to: to} when allow_empty_range==false and from ==to -> false
               ann -> true
             end)
           end)
