@@ -38,7 +38,22 @@ defmodule Annotations.Mixfile do
   defp deps do
     [
       {:ex_doc, ">= 0.0.0", only: :dev},
-      {:rangex, ">= 0.1.0", path: "../rangex"}
+    ] ++ priv_dep [
+      "openapi-ro": [
+        :rangex
+      ]
     ]
   end
+  def priv_deps(packages_by_org) do
+    packages_by_org
+    |>Enum.flat_map( fn {org, packages} ->
+      Enum.map(packages, &(priv_dep(Mix.env, to_string(org), &1)))
+    end)
+  end
+  def priv_dep(:prod, org, package ),
+    do: {package, git: "git@github.com:#{org}/#{package}.git"}
+  def priv_dep(:test, _org, package ),
+    do: {package, path: "../#{package}", env: :dev}
+  def priv_dep(env, _org, package ),
+    do: {package, path: "../#{package}", env: env}
 end
