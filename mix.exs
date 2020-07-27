@@ -38,7 +38,7 @@ defmodule Annotations.Mixfile do
   defp deps do
     [
       {:ex_doc, ">= 0.0.0", only: :dev},
-    ] ++ priv_dep [
+    ] ++ priv_deps [
       "openapi-ro": [
         :rangex
       ]
